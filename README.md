@@ -4,8 +4,6 @@ The purpose of this project is testing a C# application using one of the availab
 
 By consulting [medium.com](https://medium.com/@robertdennyson/xunit-vs-nunit-vs-mstest-choosing-the-right-testing-framework-for-net-applications-b6b9b750bec6), these tables come across as relevant.  
 
----
-
 ## Framework Comparison
 
 | Framework | Description |
