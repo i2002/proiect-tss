@@ -27,5 +27,14 @@ By consulting [medium.com](https://medium.com/@robertdennyson/xunit-vs-nunit-vs-
 
 xUnit is a newer technology, being the new standard when it comes to application testing, easily integrable in Visual Studio. It seems to be useful for cross-platform projects and for those including dependency injection. NUnit seems to be appropriate for large, extendable projects, since it provides a wide range of test attributes. MSTest appears to be the legacy model used in .NET testing, being mostly used in older applications, often being integrated into Visual Studio.
 
+Other websites that were used for ourdocumentation are the following:
+https://learn.microsoft.com/en-us/dotnet/core/testing/unit-testing-csharp-with-xunit
+https://learn.microsoft.com/en-us/dotnet/core/testing/
+https://xunit.net/
+https://www.browserstack.com/guide/nunit-vs-xunit-vs-mstest
+https://www.headspin.io/blog/nunit-vs-xunit-vs-mstest
+https://medium.com/@robertdennyson/xunit-vs-nunit-vs-mstest-choosing-the-right-testing-framework-for-net-applications-b6b9b750bec6
+https://daily.dev/blog/nunit-vs-xunit-vs-mstest-net-unit-testing-framework-comparison
+
 For the purpose of this project, we will integrate xUnit into Visual Studio in order to get familiar with testing, as well as being able to keep in touch with the continuously evolving standards. We chose xUnit since it is modern, easy to use, works well with today’s .NET tools, and makes writing and running tests simple, especially when using features like dependency injection and cross-platform support.
 
