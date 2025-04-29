@@ -1,4 +1,9 @@
-﻿namespace ProiectTSSApplication
+﻿using System;
+using static System.Runtime.InteropServices.JavaScript.JSType;
+using System.Reflection;
+using System.Numerics;
+
+namespace ProiectTSSApplication
 {
     public enum TagClass
     {
@@ -14,39 +19,114 @@
         Constructed = 0x01
     }
 
+    public enum PrimitiveTagType
+    {
+        Boolean = 0x01,
+        Integer = 0x02,
+        BitString = 0x03,
+        OctetString = 0x04,
+        Null = 0x05,
+        ObjectIdentifier = 0x06
+    }
+
+    public enum ConstructedTagType
+    {
+        Sequence = 0x10
+    }
+
+
     public class Program
     {
+        public static readonly string[] tagTypeLabels = ["primitive", "constructed"];
+        public static readonly string[] tagClassLabels = ["Universal", "Application", "ContextSpecific", "Private"];
+
         static void Main(string[] args)
         {
-            Console.WriteLine("Hello, World!");
+
         }
 
-        public void GetTagInformation(ReadOnlySpan<byte> buffer, ref int position, out string tagInfo)
+        public string GetTagInformation(TagClass tagClass, TagType tagType, byte tagNumber, int dataLen, ReadOnlySpan<byte> dataBuffer, ref int dataPosition)
         {
-            ParseTagHeader(buffer, ref position, out TagClass tagClass, out TagType tagType, out byte tagNumber, out int dataLen);
-
-            string tagTypeStr = tagType == TagType.Constructed ? "constructed" : "primitive";
-
-            switch (tagClass)
+            if (tagType == TagType.Constructed && tagNumber == (byte) ConstructedTagType.Sequence)
             {
-                case TagClass.Universal:
-                    // TODO: parsing for some common universal types: STRUCTURE, INTEGER, BITFIELD, OBJECT
-                    break;
-                case TagClass.Application:
-                    tagInfo = $"Application {tagTypeStr} tag: [{tagNumber}], with data length {dataLen}";
-                    break;
-                case TagClass.ContextSpecific:
-                    tagInfo = $"Context specific {tagTypeStr} tag: [{tagNumber}], with data length {dataLen}";
-                    break;
-                case TagClass.Private:
-                    tagInfo = $"Private {tagTypeStr} tag: {tagNumber}, with data length {dataLen}";
-                    break;
+                return $"Sequence of length {dataLen}";
             }
-        }
+            else if (tagType == TagType.Primitive)
+            {
+                if ((tagNumber == (byte)PrimitiveTagType.Boolean) && (dataLen == 1))
+                {
+                    return $"Boolean {(ReadByte(dataBuffer, ref dataPosition) == 0x00 ? "false" : "true")}";
+                }
+                else if ((tagNumber == (byte)PrimitiveTagType.Integer))
+                {
+                    // Copy signed big-endian data from DER encoding
+                    byte[] valueBytes = new byte[dataLen];
+                    Buffer.BlockCopy(dataBuffer.ToArray(), dataPosition, valueBytes, 0, dataLen);
 
-        public string ParseObjectData(ReadOnlySpan<byte> buffer, ref int position)
-        {
-            // To be implemented
+                    // .NET expects little-endian
+                    Array.Reverse(valueBytes);
+                    BigInteger intVal = new(valueBytes);
+
+                    return $"Integer {intVal}";
+                }
+                else if((tagNumber == (byte)PrimitiveTagType.BitString) && (dataLen > 1))
+                {
+                    // Get unused number of bits
+                    byte unusedBits = ReadByte(dataBuffer, ref dataPosition);
+                    if (unusedBits > 7)
+                    {
+                        throw new Exception("Invalid unused bits");
+                    }
+
+                    // Get value bytes string
+                    byte[] valueBytes = new byte[dataLen - 1];
+                    Buffer.BlockCopy(dataBuffer.ToArray(), dataPosition, valueBytes, 0, dataLen - 1);
+                    string bytesStr = BitConverter.ToString(valueBytes).Replace("-", " ");
+
+                    return $"Bit string with {unusedBits} unused bits and data {bytesStr}";
+                }
+                else if ((tagNumber == (byte)PrimitiveTagType.OctetString))
+                {
+                    // Get value bytes string
+                    byte[] valueBytes = new byte[dataLen];
+                    Buffer.BlockCopy(dataBuffer.ToArray(), dataPosition, valueBytes, 0, dataLen);
+                    string bytesStr = BitConverter.ToString(valueBytes).Replace("-", " ");
+
+                    return $"Octed string {bytesStr}";
+                }
+                else if ((tagNumber == (byte)PrimitiveTagType.Null) && (dataLen == 0))
+                {
+                    return $"Null";
+                }
+                else if ((tagNumber == (byte)PrimitiveTagType.ObjectIdentifier))
+                {
+                    // Decode first byte
+                    byte firstByte = ReadByte(dataBuffer, ref dataPosition);
+                    int value1 = firstByte / 40;
+                    int value2 = firstByte % 40;
+
+                    var oidParts = new List<long> { value1, value2 };
+
+                    // Decode base-128 integers
+                    int endPosition = dataPosition - 1 + dataLen;
+                    while (dataPosition < endPosition)
+                    {
+                        long value = 0;
+                        byte b;
+                        do
+                        {
+                            b = ReadByte(dataBuffer, ref dataPosition);
+                            value = ((int)value << 7) | (int)(b & 0x7F);
+                        } while ((b & 0x80) != 0);
+
+                        oidParts.Add(value);
+                    }
+
+                    return $"Object Identifier: {string.Join(".", oidParts.ToArray())}";
+                }
+            }
+
+            return $"{tagClassLabels[(int)tagClass]} {tagTypeLabels[(int)tagType]} tag: {tagNumber}, with data length {dataLen}";
         }
 
         /// <summary>
