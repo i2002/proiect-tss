@@ -85,3 +85,14 @@ For the next step, we will need to analyse the GetDataLength() method. It is res
 | EC5 | **Insufficient buffer for long form** | Long form detected but insufficient subsequent bytes | `[0x82, 0x01]` (expects 2 bytes but only 1 present) | Throw `Exception: "Unexpected end of data"` | Prevents reading out of bounds, critical for memory safety. | Detects buffer underflow conditions when claimed length bytes are missing. |
 | EC6 (optional) | **Oversized long form** | Long form requiring many bytes (`0x87` etc.) | `[0x87, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07]` | Read many bytes and compute large length. | Tests resilience against absurdly large but valid inputs. | Defends against potential denial-of-service or memory abuse attacks. |
 | EC7 (optional) | **Zero-length short form** | First byte = `0x00` | `[0x00]` | Return 0 (no value data follows) | Some objects (for example, NULL) legally have zero length. This case still must must be handled. | No error: a valid case where the encoded object has no value content. |
+
+
+## Boundary Value Analysis 
+
+### EC1 First bit of the first byte is 0 [0x00, 0x7F] -> the boundaries 0x00, 0x7F and middle value 0x05
+### EC2 First bit is 1 and the next 7 are 1 -> 0x81; [0x01, 0xFF] -> chose 0x10
+### EC3 First bit is 1 and the next 7 are N=[2,6] -> 0x82; [0x00, 0xFF] x N, chose 0x01, 0xF4 and 0x00, 0x10, 0x00
+### EC4 Indefinite length 0x80
+### EC5 First bit is 1 and the next 7 are N=[2,6] and the number of bytes is less than N ->chose N = 2, but just one byte actually given:  0x82, 0x01
+### EC6 First bit is 1 and the next 7 are 7 -> 0x87 and chose 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00
+### EC7 First bit is 1 and the next 7 are 0, followed by 0 bytes -> 0x00
