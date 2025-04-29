@@ -39,3 +39,18 @@ Other websites that were used for our documentation are the following:
 - https://medium.com/@robertdennyson/xunit-vs-nunit-vs-mstest-choosing-the-right-testing-framework-for-net-applications-b6b9b750bec6
 - https://daily.dev/blog/nunit-vs-xunit-vs-mstest-net-unit-testing-framework-comparison
 
+## Writing equivalence classes  
+
+First of all, we shall understand the use and need of equivalence classes. In testing, equivalence classes represent partitioning the inputs into groups also known as classes, where we assume the method would have a similar behaviour for every input group. For the purpose of this project, we will consider the GetDataLength() method and we will write the equivalence classes for it.  
+For this method, the input is a but sequence starting at some position, The behaviour depends on how the first byte looks, especially the highest bit. In order to make the data more accessible, we will present it into a table, in order to be easier to read.
+
+| **ID** | **Equivalence Class Description** | **Input Condition** | **Representative Example(s)** | **Expected Behavior** | **Notes** |
+|:------|:------------------------------------|:--------------------|:-------------------------------|:----------------------|:----------|
+| EC1 | **Short form length** | First byte value `< 0x80` (highest bit 0) | `[0x00]`, `[0x05]`, `[0x7F]` | Return the value of the first byte directly. | Length encoded in 1 byte. Common for small structures. |
+| EC2 | **Long form length (1 byte)** | First byte `0x81` (highest bit 1, low 7 bits = 1), 1 subsequent byte present | `[0x81, 0x10]` (length = 16) | Read 1 byte after first, return as length. | Used if length > 127. |
+| EC3 | **Long form length (2 bytes or more)** | First byte between `0x82`–`0x8F` (highest bit 1, low 7 bits > 1), N subsequent bytes present | `[0x82, 0x01, 0xF4]` (length = 500), `[0x83, 0x00, 0x10, 0x00]` (length = 4096) | Read N bytes, assemble a big-endian integer as the length. | Handles larger data sizes. |
+| EC4 | **Indefinite length (illegal in DER)** | First byte exactly `0x80` (highest bit 1, low 7 bits = 0) | `[0x80]` | Throw `Exception: "Indefinite length not supported"` | DER forbids indefinite length (only BER allows it). |
+| EC5 | **Insufficient buffer for long form** | Long form detected (0x81+), but buffer doesn't contain enough following bytes | `[0x82, 0x01]` (expected 2 bytes but only 1 present) | Throw `Exception: "Unexpected end of data"` | Prevents reading out of bounds. |
+| EC6 (optional) | **Oversized long form (theoretical)** | First byte with 0x87 (requiring 7 subsequent bytes) — absurd size | `[0x87, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07]` | Read 7 bytes and compute a large length (could exceed practical limits) | For robustness testing; unusual in real-world DER data. |
+| EC7 (optional) | **Zero-length short form** | First byte `0x00` | `[0x00]` | Return 0 (no data content) | Legal case: some structures can be empty. |
+
