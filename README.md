@@ -43,7 +43,36 @@ Other websites that were used for our documentation are the following:
 
 First of all, we shall understand the use and need of equivalence classes. In testing, equivalence classes represent partitioning the inputs into groups also known as classes, where we assume the method would have a similar behaviour for every input group. For the purpose of this project, we will consider the GetDataLength() method and we will write the equivalence classes for it.  
 
-For this method, the input is a but sequence starting at some position, The behaviour depends on how the first byte looks, especially the highest bit. 
+For this method, the input is a but sequence starting at some position, The behaviour depends on how the first byte looks, especially the highest bit. Let's have a look at the method: 
+
+```
+public int GetDataLength(ReadOnlySpan<byte> buffer, ref int position)
+         {
+             byte firstByte = ReadByte(buffer, ref position);
+ 
+             // Check if single byte length 
+             if ((firstByte & 0x80) == 0)
+             {
+                 return firstByte;
+             }
+ 
+             // Get the number of bytes that compose the length
+             int numBytes = firstByte & 0x7F;
+             if (numBytes == 0)
+             {
+                 throw new Exception("Indefinite length not supported in DER.");
+             }
+ 
+             // Add each byte to the length
+             int length = 0;
+             for (int i = 0; i < numBytes; i++)
+             {
+                 length = (length << 8) | ReadByte(buffer, ref position);
+             }
+             return length;
+         }
+
+```
 
 Let's analyse the GetDataLength() method. It is responsible for parsing the length field of a DER-encoded  ( Distinguished Encoding Rules) data atructure from  given byte buffer. This method interprets the Length field according to DER rules and determines how many bytes of value data will come after the length. It also handles errors, throwing an exception if an indefinite length is encountered, since DER forbids it. Furthermore, it also covers the case when there isn't enough data left in the buffer to read the declared length bytes. Let's see how different input data will behave. In order to make the information more accessible, we will present it into a table, in order to be easier to read.
 
