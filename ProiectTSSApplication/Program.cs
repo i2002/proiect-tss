@@ -244,7 +244,7 @@ namespace ProiectTSSApplication
         /// <exception cref="Exception">Thrown if the position is beyond the end of the buffer.</exception>
         public byte ReadByte(ReadOnlySpan<byte> buffer, ref int position)
         {
-            if (buffer.Length < position)
+            if (buffer.Length > position)
             {
                 return buffer[position++];
             }
