@@ -152,7 +152,7 @@ First bit is 1 and the next 7 are 0, followed by 0 bytes -> 0x00
 
 **Transforming the code into an oriented graph**
 <div width="60%">
-![My diagram](./resources/oriented_graph_code.svg)
+    <img src="./resources/oriented_graph_code.svg"/>
 </div>
 
 **Structural Explanation**
