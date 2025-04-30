@@ -38,6 +38,83 @@ Other websites that were used for our documentation are the following:
 - https://medium.com/@robertdennyson/xunit-vs-nunit-vs-mstest-choosing-the-right-testing-framework-for-net-applications-b6b9b750bec6
 - https://daily.dev/blog/nunit-vs-xunit-vs-mstest-net-unit-testing-framework-comparison
 
+## Writing equivalence classes
+
+First of all, we shall understand the use and need of equivalence classes. In testing, equivalence classes represent partitioning the inputs into groups also known as classes, where we assume the method would have a similar behaviour for every input group. For the purpose of this project, we will consider the GetDataLength() method and we will write the equivalence classes for it.
+
+For this method, the input is a byte sequence starting at some position, The behaviour depends on how the first byte looks, especially the highest bit. The method looks like this:
+
+```
+public int GetDataLength(ReadOnlySpan<byte> buffer, ref int position)
+         {
+             byte firstByte = ReadByte(buffer, ref position);
+
+             // Check if single byte length
+             if ((firstByte & 0x80) == 0)
+             {
+                 return firstByte;
+             }
+
+             // Get the number of bytes that compose the length
+             int numBytes = firstByte & 0x7F;
+             if (numBytes == 0)
+             {
+                 throw new Exception("Indefinite length not supported in DER.");
+             }
+
+             // Add each byte to the length
+             int length = 0;
+             for (int i = 0; i < numBytes; i++)
+             {
+                 length = (length << 8) | ReadByte(buffer, ref position);
+             }
+             return length;
+         }
+
+```
+
+For the next step, we will need to analyse the GetDataLength() method. It is responsible for parsing the length field of a DER-encoded ( Distinguished Encoding Rules) data atructure from given byte buffer. This method interprets the Length field according to DER rules and determines how many bytes of value data will come after the length. It also handles errors, throwing an exception if an indefinite length is encountered, since DER forbids it. Furthermore, it also covers the case when there isn't enough data left in the buffer to read the declared length bytes. Next, we need to see how different input data will behave. In order to make the information more accessible, we will present it into a table, so il will be easier to read.
+
+| **ID**         | **Class Description**                 | **Input Condition**                                        | **Representative Example(s)**                                                   | **Expected Behavior**                                                       | **Justification**                                                                                | **Explanation**                                                              |
+| :------------- | :------------------------------------ | :--------------------------------------------------------- | :------------------------------------------------------------------------------ | :-------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------- |
+| EC1            | **Short form length**                 | First byte `< 0x80` (highest bit 0)                        | `[0x00]`, `[0x05]`, `[0x7F]`                                                    | Return the first byte value directly (the first if condition returns true). | Short form is common for small data (0–127 bytes) and must be handled correctly.                 | No extra bytes are read. Length fits in the first byte.                      |
+| EC2            | **Long form length (1 byte)**         | First byte `0x81`, and next 1 byte exists                  | `[0x81, 0x10]` (length = 16)                                                    | Read 1 next byte and return as the length.                                  | Needed to support data >127 bytes, requires reading extra byte correctly.                        | MSB is 1, low bits = 1. requires one byte of actual length value.            |
+| EC3            | **Long form length (2+ bytes)**       | First byte `0x82` to `0x8F`, and corresponding bytes exist | `[0x82, 0x01, 0xF4]` (length = 500), `[0x83, 0x00, 0x10, 0x00]` (length = 4096) | Read N next bytes, combine big endian to get length.                        | Critical for handling larger structures like certificates, blobs etc.                            | Multiple bytes are combined left to right (big endian) to form large length. |
+| EC4            | **Indefinite length (forbidden)**     | First byte = `0x80`                                        | `[0x80]`                                                                        | Throw `Exception: "Indefinite length not supported"`                        | DER strictly forbids indefinite length, must reject it immediately.                              | Indefinite lengths are BER feature, DER must have explicit, finite lengths.  |
+| EC5            | **Insufficient buffer for long form** | Long form detected but insufficient subsequent bytes       | `[0x82, 0x01]` (expects 2 bytes but only 1 present)                             | Throw `Exception: "Unexpected end of data"`                                 | Prevents reading out of bounds, critical for memory safety.                                      | Detects buffer underflow conditions when claimed length bytes are missing.   |
+| EC6 (optional) | **Oversized long form**               | Long form requiring many bytes (`0x87` etc.)               | `[0x87, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07]`                              | Read many bytes and compute large length.                                   | Tests resilience against absurdly large but valid inputs.                                        | Defends against potential denial-of-service or memory abuse attacks.         |
+| EC7 (optional) | **Zero-length short form**            | First byte = `0x00`                                        | `[0x00]`                                                                        | Return 0 (no value data follows)                                            | Some objects (for example, NULL) legally have zero length. This case still must must be handled. | No error: a valid case where the encoded object has no value content.        |
+
+## Boundary Value Analysis
+
+### EC1
+
+First bit of the first byte is 0 [0x00, 0x7F] -> the boundaries 0x00, 0x7F and middle value 0x05
+
+### EC2
+
+First bit is 1 and the next 7 are 1 -> 0x81; [0x01, 0xFF] -> chose 0x10
+
+### EC3
+
+First bit is 1 and the next 7 are N=[2,6] -> 0x82; [0x00, 0xFF] x N, chose 0x01, 0xF4 and 0x00, 0x10, 0x00
+
+### EC4
+
+Indefinite length 0x80
+
+### EC5
+
+First bit is 1 and the next 7 are N=[2,6] and the number of bytes is less than N ->chose N = 2, but just one byte actually given: 0x82, 0x01
+
+### EC6
+
+First bit is 1 and the next 7 are 7 -> 0x87 and chose 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00
+
+### EC7
+
+First bit is 1 and the next 7 are 0, followed by 0 bytes -> 0x00
+
 ## Structural testing
 
 ### Transforming the code into an oriented graph
@@ -52,7 +129,7 @@ Other websites that were used for our documentation are the following:
 - **Branch coverage**  
   For `if ((firstByte & 0x80) == 0)` and for `if (numBytes == 0)` we have covered both the “true” and “false” branches.
 
-- **Condition coverage & Condition/Decision coverage**  
+- **Condition & Decision coverage**  
   Each individual bitwise condition (`firstByte & 0x80`, `firstByte & 0x7F`) takes both `true` and `false` values, and each overall decision also evaluates to both outcomes.
 
 - **Multiple condition coverage**  
