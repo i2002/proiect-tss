@@ -2,9 +2,9 @@ using System;
 using Xunit;
 using ProiectTSSApplication;
 
-namespace ProiectTSSApplication.Tests
+namespace ProiectTSSTests
 {
-    public class DerLengthParserTests
+    public class DerReaderFunctionalBoundaryTests
     {
         [Theory]
         [InlineData(new byte[] { 0x00 }, 0)]
