@@ -67,7 +67,7 @@ It also handles errors, throwing an exception if an indefinite length is encount
 
 Furthermore, it also covers the case when there isn't enough data left in the buffer to read the declared length bytes.
 
-```
+```csharp
 public int GetDataLength(ReadOnlySpan<byte> buffer, ref int position)
 {
     byte firstByte = ReadByte(buffer, ref position);
@@ -116,39 +116,39 @@ Next, we need to nalyse the GetDataLength() method and see how different input d
 | EC6 (optional) | **Oversized long form**               | Long form requiring many bytes (`0x87` etc.)               | `[0x87, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07]`                              | Read many bytes and compute large length.                                   | Tests resilience against absurdly large but valid inputs.                                        | Defends against potential denial-of-service or memory abuse attacks.         |
 | EC7 (optional) | **Zero-length short form**            | First byte = `0x00`                                        | `[0x00]`                                                                        | Return 0 (no value data follows)                                            | Some objects (for example, NULL) legally have zero length. This case still must must be handled. | No error: a valid case where the encoded object has no value content.        |
 
-## Boundary Value Analysis
+### Boundary Value Analysis
 
-### EC1
+**EC1**
 
 First bit of the first byte is 0 [0x00, 0x7F] -> the boundaries 0x00, 0x7F and middle value 0x05
 
-### EC2
+**EC2**
 
 First bit is 1 and the next 7 are 1 -> 0x81; [0x01, 0xFF] -> chose 0x10
 
-### EC3
+**EC3**
 
 First bit is 1 and the next 7 are N=[2,6] -> 0x82; [0x00, 0xFF] x N, chose 0x01, 0xF4 and 0x00, 0x10, 0x00
 
-### EC4
+**EC4**
 
 Indefinite length 0x80
 
-### EC5
+**EC5**
 
 First bit is 1 and the next 7 are N=[2,6] and the number of bytes is less than N ->chose N = 2, but just one byte actually given: 0x82, 0x01
 
-### EC6
+**EC6**
 
 First bit is 1 and the next 7 are 7 -> 0x87 and chose 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00
 
-### EC7
+**EC7**
 
 First bit is 1 and the next 7 are 0, followed by 0 bytes -> 0x00
 
-## Structural testing
+### Structural testing
 
-### Transforming the code into an oriented graph
+**Transforming the code into an oriented graph**
 
 ![My diagram](./resources/oriented_graph_code.svg)
 
@@ -177,16 +177,16 @@ First bit is 1 and the next 7 are 0, followed by 0 bytes -> 0x00
 - **Circuit and Path Coverage**  
   All 4 linearly independent paths (cyclomatic complexity = 4) are tested, including single-byte, exception, and multi-byte cases.
 
-
-## Mutation Testing
+### Mutation Testing
 To further ensure the reliability of our tests, we applied mutation testing using Stryker.NET. This approach evaluates how well the current test suite detects bugs by introducing small code changes (called mutants) and observing whether the tests catch them.
 
-### What is Mutation Testing?
+**What is Mutation Testing?**
+
 Mutation testing works by automatically modifying the code—changing operators, logic, or constants—to simulate common mistakes. If the tests fail in response to a mutation, the mutant is killed. If the tests pass, the mutant survives, revealing potential blind spots in our testing strategy.
 
 This method complements traditional code coverage by checking test effectiveness, not just code execution.
 
-### Results Summary
+**Results Summary**
 
 | Metric     | Value   | Explanation | 
 | ---------- | --------| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -195,8 +195,8 @@ This method complements traditional code coverage by checking test effectiveness
 | **Timeouts** | 0     | All tests completed execution reliably
 
 
- ### Interpretation
- The 7 surviving mutants suggest:
+**Interpretation**
+The 7 surviving mutants suggest:
 
 - Some edge cases or paths might not be covered adequately.
 
@@ -206,7 +206,8 @@ This method complements traditional code coverage by checking test effectiveness
 
 - These surviving cases are valuable signals, not failures—they guide us in strengthening our test coverage.
 
- ### Next Steps : 
+**Next Steps:**
+
 - Review the mutation testing report (StrykerOutput/reports/mutation-report.html).
 
 - Identify why each surviving mutant was not detected.
@@ -215,13 +216,18 @@ This method complements traditional code coverage by checking test effectiveness
 
 - Re-run mutation testing to confirm improvements.
 
- ### How to Run Mutation Testing
+**How to Run Mutation Testing**
+
 To run mutation tests on your own machine:
 
-### Install the Stryker.NET global tool:
-         dotnet tool install -g dotnet-stryker
+- Install the Stryker.NET global tool:
+  ```
+  dotnet tool install -g dotnet-stryker
+  ```
 
-### From the test project directory, run:
-         dotnet stryker
+- From the test project directory, run:
+  ```
+  dotnet stryker
+  ```
          
 After it completes, open the detailed HTML report
