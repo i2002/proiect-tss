@@ -10,7 +10,7 @@ namespace ProiectTSSTests
         [InlineData(new byte[] { 0x00 }, 0)]
         [InlineData(new byte[] { 0x05 }, 5)]
         [InlineData(new byte[] { 0x7F }, 127)]
-        public void GetDataLength_First_Bit_0(byte[] buffer, int expectedLength)
+        public void GetDataLength_EC1(byte[] buffer, int expectedLength)
         {
             var parser = new Program();
             int position = 0;
