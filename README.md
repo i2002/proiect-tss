@@ -2,9 +2,11 @@
 
 The purpose of this project is testing a C# application using one of the available tools, in order to get familiar with the basic testing concepts, such as unit testing, mutation testing and more. In order to get started, a unit testing tool needs to be decided upon. Since there are multiple tools to choose from, the three best options available are the following: xUnit, NUnit and MSTest. A better understanding of each of them is required before deciding on the one that shall be used further in our project.
 
+
+## Testing environment
 By consulting [medium.com](https://medium.com/@robertdennyson/xunit-vs-nunit-vs-mstest-choosing-the-right-testing-framework-for-net-applications-b6b9b750bec6), these tables come across as relevant.  
 
-## Framework Comparison
+### Framework Comparison
 
 | Framework | Description |
 |----------|-------------|
@@ -12,7 +14,7 @@ By consulting [medium.com](https://medium.com/@robertdennyson/xunit-vs-nunit-vs-
 | **NUnit** | One of the oldest and most widely-used unit testing frameworks in the .NET ecosystem, known for its extensive attributes and compatibility with a wide range of tools. |
 | **MSTest** | Microsoft’s built-in testing framework, well-integrated with Visual Studio. It is often the default for legacy .NET projects and provides solid integration with Microsoft tools. |
 
-## Comparison of Key Features
+### Comparison of Key Features
 
 | Feature | xUnit | NUnit | MSTest |
 |--------|-------|-------|--------|
@@ -39,42 +41,71 @@ Other websites that were used for our documentation are the following:
 - https://medium.com/@robertdennyson/xunit-vs-nunit-vs-mstest-choosing-the-right-testing-framework-for-net-applications-b6b9b750bec6
 - https://daily.dev/blog/nunit-vs-xunit-vs-mstest-net-unit-testing-framework-comparison
 
-## Writing equivalence classes  
 
-First of all, we shall understand the use and need of equivalence classes. In testing, equivalence classes represent partitioning the inputs into groups also known as classes, where we assume the method would have a similar behaviour for every input group. For the purpose of this project, we will consider the GetDataLength() method and we will write the equivalence classes for it.  
+## Program description
+### DER encoding of ASN.1 structure
+ASN.1 (Abstract Syntax Notation One) defines abstract data types and is used in defining data structure in standards such as X509 public key certificates which is widely used (for examle for the TLS implementation in HTTPS) ([RFC2459](https://www.ietf.org/rfc/rfc2459.txt)).
 
-For this method, the input is a byte sequence starting at some position, The behaviour depends on how the first byte looks, especially the highest bit. The method looks like this: 
+DER (Distinguished Encoding Rules) is specifies rules for encoding and decoding ASN.1 data into / from byte representation. 
+
+In DER, each element has a Tag-Length-Value structure:
+- Tag (1 byte)
+    - bits 8-7: class (universal, application, context-specific, private)
+    - bit 6: primitive (0) or constructed (1)
+    - bits 5-1: tag number
+- Length (>= 1 byte): Number of bytes for the Value part
+    - short form (bit 8 is 0)
+        - bits 7 - 1 represent the length
+    - long form (bit 8 is 1)
+        - bits 7 - 1 represent the number of bytes for the length (n)
+        - next n bytes represent the length as an unsigned big-endian integer
+- Value: Encoded content (interptreted based on tag number)
+
+### Tested method
+For testing in this project, we have chosen `GetDataLength` function which decodes the length part from the TLV structure of a DER encoding.
+
+It also handles errors, throwing an exception if an indefinite length is encountered, since DER forbids it.
+
+Furthermore, it also covers the case when there isn't enough data left in the buffer to read the declared length bytes. 
 
 ```
 public int GetDataLength(ReadOnlySpan<byte> buffer, ref int position)
-         {
-             byte firstByte = ReadByte(buffer, ref position);
+{
+    byte firstByte = ReadByte(buffer, ref position);
  
-             // Check if single byte length 
-             if ((firstByte & 0x80) == 0)
-             {
-                 return firstByte;
-             }
+    // Check if single byte length 
+    if ((firstByte & 0x80) == 0)
+    {
+        return firstByte;
+    }
  
-             // Get the number of bytes that compose the length
-             int numBytes = firstByte & 0x7F;
-             if (numBytes == 0)
-             {
-                 throw new Exception("Indefinite length not supported in DER.");
-             }
+    // Get the number of bytes that compose the length
+    int numBytes = firstByte & 0x7F;
+    if (numBytes == 0)
+    {
+        throw new Exception("Indefinite length not supported in DER.");
+    }
  
-             // Add each byte to the length
-             int length = 0;
-             for (int i = 0; i < numBytes; i++)
-             {
-                 length = (length << 8) | ReadByte(buffer, ref position);
-             }
-             return length;
-         }
+    // Add each byte to the length
+    int length = 0;
+    for (int i = 0; i < numBytes; i++)
+    {
+        length = (length << 8) | ReadByte(buffer, ref position);
+    }
+    return length;
+}
 
 ```
 
-For the next step, we will need to analyse the GetDataLength() method. It is responsible for parsing the length field of a DER-encoded  ( Distinguished Encoding Rules) data atructure from  given byte buffer. This method interprets the Length field according to DER rules and determines how many bytes of value data will come after the length. It also handles errors, throwing an exception if an indefinite length is encountered, since DER forbids it. Furthermore, it also covers the case when there isn't enough data left in the buffer to read the declared length bytes. Next, we need to see how different input data will behave. In order to make the information more accessible, we will present it into a table, so il will be easier to read.
+
+## Functional testing
+### Writing equivalence classes  
+
+First of all, we shall understand the use and need of equivalence classes. In testing, equivalence classes represent partitioning the inputs into groups also known as classes, where we assume the method would have a similar behaviour for every input group. For the purpose of this project, we will consider the GetDataLength() method and we will write the equivalence classes for it.  
+
+For this method, the input is a byte sequence starting at some position, The behaviour depends on how the first byte looks, especially the highest bit.
+
+Next, we need to nalyse the GetDataLength() method and see how different input data will behave. In order to make the information more accessible, we will present it into a table, so il will be easier to read.
 
 | **ID** | **Class Description** | **Input Condition** | **Representative Example(s)** | **Expected Behavior** | **Justification** | **Explanation** |
 |:------|:-----------------------|:--------------------|:-------------------------------|:----------------------|:------------------|:----------------|
