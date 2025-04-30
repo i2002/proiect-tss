@@ -151,8 +151,8 @@ First bit is 1 and the next 7 are 0, followed by 0 bytes -> 0x00
 ### Coverage testing
 
 **Transforming the code into an oriented graph**
-<div width="60%">
-    <img src="./resources/oriented_graph_code.svg"/>
+<div style="text-align:center">
+    <img src="./resources/oriented_graph_code.svg" width="45%"/>
 </div>
 
 **Structural Explanation**
