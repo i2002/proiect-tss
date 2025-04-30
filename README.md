@@ -146,7 +146,9 @@ First bit is 1 and the next 7 are 7 -> 0x87 and chose 0x00, 0x00, 0x00, 0x01, 0x
 
 First bit is 1 and the next 7 are 0, followed by 0 bytes -> 0x00
 
-### Structural testing
+## Structural testing
+
+### Coverage testing
 
 **Transforming the code into an oriented graph**
 
