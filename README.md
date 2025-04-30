@@ -145,3 +145,52 @@ First bit is 1 and the next 7 are 0, followed by 0 bytes -> 0x00
 
 - **Circuit and Path Coverage**  
   All 4 linearly independent paths (cyclomatic complexity = 4) are tested, including single-byte, exception, and multi-byte cases.
+
+
+## Mutation Testing
+To further ensure the reliability of our tests, we applied mutation testing using Stryker.NET. This approach evaluates how well the current test suite detects bugs by introducing small code changes (called mutants) and observing whether the tests catch them.
+
+### What is Mutation Testing?
+Mutation testing works by automatically modifying the code—changing operators, logic, or constants—to simulate common mistakes. If the tests fail in response to a mutation, the mutant is killed. If the tests pass, the mutant survives, revealing potential blind spots in our testing strategy.
+
+This method complements traditional code coverage by checking test effectiveness, not just code execution.
+
+### Results Summary
+
+| Metric     | Value   | Explanation | 
+| ---------- | --------| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Mutants Killed**   | 17 |  Our test suite successfully detected these faulty code mutations
+| **Mutants Survived** | 7 |  These indicate areas where our tests did not detect injected logic changes
+| **Timeouts** | 0     | All tests completed execution reliably
+
+
+ ### Interpretation
+ The 7 surviving mutants suggest:
+
+- Some edge cases or paths might not be covered adequately.
+
+- Certain assertions may be too weak or missing.
+
+- Potential improvements in test logic or input variety.
+
+- These surviving cases are valuable signals, not failures—they guide us in strengthening our test coverage.
+
+ ### Next Steps : 
+- Review the mutation testing report (StrykerOutput/reports/mutation-report.html).
+
+- Identify why each surviving mutant was not detected.
+
+- Add or improve tests to cover these blind spots.
+
+- Re-run mutation testing to confirm improvements.
+
+ ### How to Run Mutation Testing
+To run mutation tests on your own machine:
+
+### Install the Stryker.NET global tool:
+         dotnet tool install -g dotnet-stryker
+
+### From the test project directory, run:
+         dotnet stryker
+         
+After it completes, open the detailed HTML report
