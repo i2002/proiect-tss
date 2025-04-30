@@ -102,49 +102,97 @@ public int GetDataLength(ReadOnlySpan<byte> buffer, ref int position)
 
 First of all, we shall understand the use and need of equivalence classes. In testing, equivalence classes represent partitioning the inputs into groups also known as classes, where we assume the method would have a similar behaviour for every input group. For the purpose of this project, we will consider the GetDataLength() method and we will write the equivalence classes for it.
 
-For this method, the input is a byte sequence starting at some position, The behaviour depends on how the first byte looks, especially the highest bit.
+#### 1. **The first bit**
 
-Next, we need to nalyse the GetDataLength() method and see how different input data will behave. In order to make the information more accessible, we will present it into a table, so il will be easier to read.
+The most important bit can either be 0 or 1. In the first case, the next 7 bits encode the result, in the second, the next 7 bits encode the length of the result. Therefore, two classes stand out.
 
-| **ID**         | **Class Description**                 | **Input Condition**                                        | **Representative Example(s)**                                                   | **Expected Behavior**                                                       | **Justification**                                                                                | **Explanation**                                                              |
-| :------------- | :------------------------------------ | :--------------------------------------------------------- | :------------------------------------------------------------------------------ | :-------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------- |
-| EC1            | **Short form length**                 | First byte `< 0x80` (highest bit 0)                        | `[0x00]`, `[0x05]`, `[0x7F]`                                                    | Return the first byte value directly (the first if condition returns true). | Short form is common for small data (0–127 bytes) and must be handled correctly.                 | No extra bytes are read. Length fits in the first byte.                      |
-| EC2            | **Long form length (1 byte)**         | First byte `0x81`, and next 1 byte exists                  | `[0x81, 0x10]` (length = 16)                                                    | Read 1 next byte and return as the length.                                  | Needed to support data >127 bytes, requires reading extra byte correctly.                        | MSB is 1, low bits = 1. requires one byte of actual length value.            |
-| EC3            | **Long form length (2+ bytes)**       | First byte `0x82` to `0x8F`, and corresponding bytes exist | `[0x82, 0x01, 0xF4]` (length = 500), `[0x83, 0x00, 0x10, 0x00]` (length = 4096) | Read N next bytes, combine big endian to get length.                        | Critical for handling larger structures like certificates, blobs etc.                            | Multiple bytes are combined left to right (big endian) to form large length. |
-| EC4            | **Indefinite length (forbidden)**     | First byte = `0x80`                                        | `[0x80]`                                                                        | Throw `Exception: "Indefinite length not supported"`                        | DER strictly forbids indefinite length, must reject it immediately.                              | Indefinite lengths are BER feature, DER must have explicit, finite lengths.  |
-| EC5            | **Insufficient buffer for long form** | Long form detected but insufficient subsequent bytes       | `[0x82, 0x01]` (expects 2 bytes but only 1 present)                             | Throw `Exception: "Unexpected end of data"`                                 | Prevents reading out of bounds, critical for memory safety.                                      | Detects buffer underflow conditions when claimed length bytes are missing.   |
-| EC6 (optional) | **Oversized long form**               | Long form requiring many bytes (`0x87` etc.)               | `[0x87, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07]`                              | Read many bytes and compute large length.                                   | Tests resilience against absurdly large but valid inputs.                                        | Defends against potential denial-of-service or memory abuse attacks.         |
-| EC7 (optional) | **Zero-length short form**            | First byte = `0x00`                                        | `[0x00]`                                                                        | Return 0 (no value data follows)                                            | Some objects (for example, NULL) legally have zero length. This case still must must be handled. | No error: a valid case where the encoded object has no value content.        |
+**BYTE1BIT1:**
+
+-   BYTE1BIT1_1:  0
+    
+-   BYTE1BIT1_2: 1
+
+#### 2. **The next 7 bits**
+
+ The next 7 bits can take values between 0 and 127, however, in case of the first bit being 1, the next 7 bits cannot be encoding 0. The two classes are 0 and [1,127].
+ 
+ **BYTE1BIT2-8:**
+- BYTE1BIT2-8_1:  0
+-  BYTE1BIT2-8_2: [1-127]
+
+#### 3.**The following bytes**
+Next, if the first bit is not 0, the algorithm will read an number of bytes equal to the value encoded in the bits 2-8. However, there might be less bytes to be read than the number given in the 2-8 bits. Two classes emerge.
+
+**BYTES:**
+- BYTES_1 < declared
+- BYTES_2 >= declared
+
+This table explains what each value or interval of the encoding bytes implies about the length.
+
+
+| Case       | BYTE1BIT1 | BYTE1BIT2-8 Value | Number of bytes vs Declared Length | Class Combination                                  | Interpretation                                          |
+|------------|-----------|-------------------|-----------------------------|----------------------------------------------------|---------------------------------------------------------|
+| C_1_1      | 0         | 0                 | ___                         | BYTE1BIT1_1, BYTE1BIT2-8_1                         | Encodes result = 0, no further processing           |
+| C_1_2      | 0         | 1–127             | ___                        | BYTE1BIT1_1, BYTE1BIT2-8_2                     | Result encoded in 7 bits, no extra processing              |
+| C_2_1      | 1         | 0                 |___                         | BYTE1BIT1_2, BYTE1BIT2-8_1                                       | Not allowed     |
+| C_2_2_1    | 1         | 1–127             |  < declared                 | BYTE1BIT1_2, BYTE1BIT2-8_2, BYTES_1            | Declared length too small for actual data               |
+| C_2_2_2    | 1         | 1–127             | >= declared                | BYTE1BIT1_2, BYTE1BIT2-8_2, BYTES_2            | Valid length        |
+
+
+Choosing random values, we test:
+| Case     | BYTE1BIT1 (bit 1) | BYTE1BIT2-8 (bits 2–8) | BYTES (beginning with byte2)    
+|----------|-------------------|------------------------|-------------------------------|
+| C_1_1    | 0                 | 0000000 (0)            | ---                           | 
+| C_1_2    | 0                 | 0010110 (22)           | ---                           |
+| C_2_1    | 1                 | 0000000 (0)            | ---                           |  
+| C_2_2_1  | 1                 | 0000110 (6)            | 0xFF 0x00                     | 
+| C_2_2_2  | 1                 | 0000011 (3)            | 0xA1 0xB2 0xC3                | 
+
 
 ### Boundary Value Analysis
 
-**EC1**
+Boundary Value Analysis is typically used together with equivalence partitioning.  
+It focuses on examining the boundary values of each class, which are often a common source of errors.
 
-First bit of the first byte is 0 [0x00, 0x7F] -> the boundaries 0x00, 0x7F and middle value 0x05
+In our example, once the equivalence classes have been identified, the boundary values are easy to determine.
 
-**EC2**
+**First bit:**
+- BYTE1BIT1_0 = 0
+- BYTE1BIT1_1 = 1 
 
-First bit is 1 and the next 7 are 1 -> 0x81; [0x01, 0xFF] -> chose 0x10
+**Next 7 bits:**
+- BYTE1BIT2-8_1 = 0
+-  BYTE1BIT2-8_2 = 1
+- BYTE1BIT2-8_3 = 127 
 
-**EC3**
+(is impossible to write 128 in 7 bits)
 
-First bit is 1 and the next 7 are N=[2,6] -> 0x82; [0x00, 0xFF] x N, chose 0x01, 0xF4 and 0x00, 0x10, 0x00
+**Next bytes:**
+- BYTES_1: no extra bytes
+- BYTES_2: 1 byte
+- BYTES_3: 127 bytes
+- BYTES_4 128 bytes.
 
-**EC4**
+For the next bytes, for the no extra bytes, the value will be BYTES_1 = N/A, and for the others, we randomly choose 1 byte: 
+BYTES_2 = 0xF0, 127 bytes: BYTES_3 = 0xA0 for 127 bytes BYTES_4 = 0xA0 for 128 bytes.
 
-Indefinite length 0x80
+| Case        | BYTE1BIT1 | BYTE1BIT2-8 | Payload Bytes                          | Expected Behavior                                  |
+|-------------|-----------|-------------|----------------------------------------|----------------------------------------------------|
+| C_1_1     | 0         | 0           | ---                                    | Valid – Result = 0, the rest ignored                             |     |
+| C_1_2     | 0         | 1           | ---                                    | Valid – Result = 1, the rest ignored                              |
+| C_1_3     | 0         | 127         | ---                                    | Valid – Result = 127, the rest ignored                            |
+| C_2_1     | 1         | 0           | ---                                   | Invalid – Length = 0 not allowed                |
+| C_2_2_1     | 1         | 1           | N/A                                    | Invalid – 1 byte expected, got none             |
+| C_2_2_2     | 1         | 1           | F0                                     | Valid – Result = 240(0xF0) exact match                             |
+| C_2_2_3     | 1         | 1           | A0 x 127                               | Valid – Result = 160(0xA0) extra bytes allowed                     |
+| C_2_2_4     | 1         | 1           | A0 x 128                               | Valid – Result = 160(0xA0) extra bytes allowed                     |
+| C_2_3_1     | 1         | 127         | N/A                                    | Invalid – 127 bytes expected, got none          |
+| C_2_3_2     | 1         | 127         | F0                                     | Invalid – only 1 byte, 126 missing              |
+| C_2_3_3     | 1         | 127         | A0 x 127                               | Valid – Result = 0xA0 x 127 exact match                             |
+| C_2_3_4     | 1         | 127         | A0 x 128                               | Valid – Result = 0xA0 x 127 extra byte allowed                      |
+               
 
-**EC5**
 
-First bit is 1 and the next 7 are N=[2,6] and the number of bytes is less than N ->chose N = 2, but just one byte actually given: 0x82, 0x01
-
-**EC6**
-
-First bit is 1 and the next 7 are 7 -> 0x87 and chose 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00
-
-**EC7**
-
-First bit is 1 and the next 7 are 0, followed by 0 bytes -> 0x00
 
 ## Structural testing
 
