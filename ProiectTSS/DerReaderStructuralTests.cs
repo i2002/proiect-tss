@@ -57,22 +57,6 @@ namespace ProiectTSSTests
 
 			Assert.Equal(expectedLength, length);
 			Assert.Equal(expectedPos, pos);
-		}
-
-		///// <summary>
-		///// MC/DC coverage: demonstrates that each condition (MSB bit, numBytes values)
-		///// independently influences the decision. Covered by combining these four scenarios:
-		///// - MSB unset (single-byte)
-		///// - MSB set, numBytes = 1
-		///// - MSB set, numBytes > 1
-		///// - MSB set, numBytes = 0 (exception)
-		///// </summary>
-		//[Fact]
-		//public void GetDataLength_MultipleConditions_MC_DC()
-		//{
-		//	// The four scenarios are already covered by the tests above,
-		//	// ensuring that each atomic condition flips output independently.
-		//	Assert.True(true, "MC/DC coverage asigurată prin cele 4 cazuri de test.");
-		//}
+		} 
 	}
 }
