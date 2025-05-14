@@ -21,16 +21,16 @@
         /// </exception>
         public long GetDataLength(byte firstByte, ReadOnlySpan<byte> buffer, ref int position)
         {
-            // Validate parameter position
-            if (position < 0 || (position == buffer.Length && buffer.Length != 0) || position > buffer.Length)
-            {
-                throw new Exception("Invalid position");
-            }
-
             // Check if single byte length 
             if ((firstByte & 0x80) == 0)
             {
                 return firstByte;
+            }
+
+            // Validate parameter position
+            if (position < 0 || position > buffer.Length)
+            {
+                throw new Exception("Invalid position");
             }
 
             // Get the number of bytes that compose the length
