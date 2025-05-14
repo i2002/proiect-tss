@@ -22,7 +22,7 @@
         public long GetDataLength(byte firstByte, ReadOnlySpan<byte> buffer, ref int position)
         {
             // Validate parameter position
-            if (position < 0 || position >= buffer.Length)
+            if (position < 0 || (position == buffer.Length && buffer.Length != 0) || position > buffer.Length)
             {
                 throw new Exception("Invalid position");
             }
