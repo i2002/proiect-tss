@@ -321,6 +321,16 @@ The 7 surviving mutants suggest:
 
 - Re-run mutation testing to confirm improvements.
 
+**Follow up:**
+
+After cleaning up implementation and adding more test cases we now have the following report:
+
+| Metric               | Value | Explanation                                                                |
+| -------------------- | ----- | -------------------------------------------------------------------------- |
+| **Mutants Killed**   | 26    | Our test suite successfully detected these faulty code mutations           |
+| **Mutants Survived** | 0     | These indicate areas where our tests did not detect injected logic changes |
+| **Timeouts**         | 0     | All tests completed execution reliably                                     |
+
 **How to Run Mutation Testing**
 
 To run mutation tests on your own machine:
