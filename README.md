@@ -231,6 +231,16 @@ BYTES_2 = 0xF0, 127 bytes: BYTES_3 = 0xA0 for 127 bytes BYTES_4 = 0xA0 for 128 b
 - **Circuit and Path Coverage**  
   All 4 linearly independent paths (cyclomatic complexity = 4) are tested, including single-byte, exception, and multi-byte cases.
 
+- **Coverage report**
+  We integrated Coverlet into our xUnit test project to collect detailed code‐coverage metrics on every test run. By running
+
+```bash
+dotnet test --collect:"XPlat Code Coverage" --results-directory ./TestResults
+reportgenerator -reports:TestResults/**/*.cobertura.xml -targetdir:reports -reporttypes:Html
+```
+
+we produced a full HTML report in the reports folder. Our latest results show 92 % line coverage and 100 % branch coverage, giving us confidence that nearly all code paths are exercised by our tests.
+
 ### Mutation Testing
 
 To further ensure the reliability of our tests, we applied mutation testing using Stryker.NET. This approach evaluates how well the current test suite detects bugs by introducing small code changes (called mutants) and observing whether the tests catch them.
