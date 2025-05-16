@@ -2,8 +2,8 @@
 
 The purpose of this project is testing a C# application using one of the available tools, in order to get familiar with the basic testing concepts, such as unit testing, mutation testing and more. In order to get started, a unit testing tool needs to be decided upon. Since there are multiple tools to choose from, the three best options available are the following: xUnit, NUnit and MSTest. A better understanding of each of them is required before deciding on the one that shall be used further in our project.
 
-
 ## Testing environment
+
 By consulting [medium.com](https://medium.com/@robertdennyson/xunit-vs-nunit-vs-mstest-choosing-the-right-testing-framework-for-net-applications-b6b9b750bec6), these tables come across as relevant.
 
 ### Framework Comparison
@@ -40,27 +40,30 @@ Other websites that were used for our documentation are the following:
 - https://medium.com/@robertdennyson/xunit-vs-nunit-vs-mstest-choosing-the-right-testing-framework-for-net-applications-b6b9b750bec6
 - https://daily.dev/blog/nunit-vs-xunit-vs-mstest-net-unit-testing-framework-comparison
 
-
 ## Program description
+
 ### DER encoding of ASN.1 structure
+
 ASN.1 (Abstract Syntax Notation One) defines abstract data types and is used in defining data structure in standards such as X509 public key certificates which is widely used (for examle for the TLS implementation in HTTPS) ([RFC2459](https://www.ietf.org/rfc/rfc2459.txt)).
 
 DER (Distinguished Encoding Rules) is specifies rules for encoding and decoding ASN.1 data into / from byte representation.
 
 In DER, each element has a Tag-Length-Value structure:
+
 - Tag (1 byte)
-    - bits 8-7: class (universal, application, context-specific, private)
-    - bit 6: primitive (0) or constructed (1)
-    - bits 5-1: tag number
+  - bits 8-7: class (universal, application, context-specific, private)
+  - bit 6: primitive (0) or constructed (1)
+  - bits 5-1: tag number
 - Length (>= 1 byte): Number of bytes for the Value part
-    - short form (bit 8 is 0)
-        - bits 7 - 1 represent the length
-    - long form (bit 8 is 1)
-        - bits 7 - 1 represent the number of bytes for the length (n)
-        - next n bytes represent the length as an unsigned big-endian integer
+  - short form (bit 8 is 0)
+    - bits 7 - 1 represent the length
+  - long form (bit 8 is 1)
+    - bits 7 - 1 represent the number of bytes for the length (n)
+    - next n bytes represent the length as an unsigned big-endian integer
 - Value: Encoded content (interptreted based on tag number)
 
 ### Tested method
+
 For testing in this project, we have chosen `GetDataLength` function which decodes the length part from the TLV structure of a DER encoding.
 
 It also handles errors, throwing an exception if an indefinite length is encountered, since DER forbids it.
@@ -96,8 +99,8 @@ public int GetDataLength(ReadOnlySpan<byte> buffer, ref int position)
 
 ```
 
-
 ## Functional testing
+
 ### Writing equivalence classes
 
 First of all, we shall understand the use and need of equivalence classes. In testing, equivalence classes represent partitioning the inputs into groups also known as classes, where we assume the method would have a similar behaviour for every input group. For the purpose of this project, we will consider the GetDataLength() method and we will write the equivalence classes for it.
@@ -108,46 +111,45 @@ The most important bit can either be 0 or 1. In the first case, the next 7 bits 
 
 **BYTE1BIT1:**
 
--   BYTE1BIT1_1:  0
-    
--   BYTE1BIT1_2: 1
+- BYTE1BIT1_1: 0
+- BYTE1BIT1_2: 1
 
 #### 2. **The next 7 bits**
 
- The next 7 bits can take values between 0 and 127, however, in case of the first bit being 1, the next 7 bits cannot be encoding 0. The two classes are 0 and [1,127].
- 
- **BYTE1BIT2-8:**
-- BYTE1BIT2-8_1:  0
--  BYTE1BIT2-8_2: [1-127]
+The next 7 bits can take values between 0 and 127, however, in case of the first bit being 1, the next 7 bits cannot be encoding 0. The two classes are 0 and [1,127].
+
+**BYTE1BIT2-8:**
+
+- BYTE1BIT2-8_1: 0
+- BYTE1BIT2-8_2: [1-127]
 
 #### 3.**The following bytes**
+
 Next, if the first bit is not 0, the algorithm will read an number of bytes equal to the value encoded in the bits 2-8. However, there might be less bytes to be read than the number given in the 2-8 bits. Two classes emerge.
 
 **BYTES:**
+
 - BYTES_1 < declared
 - BYTES_2 >= declared
 
 This table explains what each value or interval of the encoding bytes implies about the length.
 
-
-| Case       | BYTE1BIT1 | BYTE1BIT2-8 Value | Number of bytes vs Declared Length | Class Combination                                  | Interpretation                                          |
-|------------|-----------|-------------------|-----------------------------|----------------------------------------------------|---------------------------------------------------------|
-| C_1_1      | 0         | 0                 | ___                         | BYTE1BIT1_1, BYTE1BIT2-8_1                         | Encodes result = 0, no further processing           |
-| C_1_2      | 0         | 1–127             | ___                        | BYTE1BIT1_1, BYTE1BIT2-8_2                     | Result encoded in 7 bits, no extra processing              |
-| C_2_1      | 1         | 0                 |___                         | BYTE1BIT1_2, BYTE1BIT2-8_1                                       | Not allowed     |
-| C_2_2_1    | 1         | 1–127             |  < declared                 | BYTE1BIT1_2, BYTE1BIT2-8_2, BYTES_1            | Declared length too small for actual data               |
-| C_2_2_2    | 1         | 1–127             | >= declared                | BYTE1BIT1_2, BYTE1BIT2-8_2, BYTES_2            | Valid length        |
-
+| Case    | BYTE1BIT1 | BYTE1BIT2-8 Value | Number of bytes vs Declared Length | Class Combination                   | Interpretation                                |
+| ------- | --------- | ----------------- | ---------------------------------- | ----------------------------------- | --------------------------------------------- |
+| C_1_1   | 0         | 0                 | \_\_\_                             | BYTE1BIT1_1, BYTE1BIT2-8_1          | Encodes result = 0, no further processing     |
+| C_1_2   | 0         | 1–127             | \_\_\_                             | BYTE1BIT1_1, BYTE1BIT2-8_2          | Result encoded in 7 bits, no extra processing |
+| C_2_1   | 1         | 0                 | \_\_\_                             | BYTE1BIT1_2, BYTE1BIT2-8_1          | Not allowed                                   |
+| C_2_2_1 | 1         | 1–127             | < declared                         | BYTE1BIT1_2, BYTE1BIT2-8_2, BYTES_1 | Declared length too small for actual data     |
+| C_2_2_2 | 1         | 1–127             | >= declared                        | BYTE1BIT1_2, BYTE1BIT2-8_2, BYTES_2 | Valid length                                  |
 
 Choosing random values, we test:
-| Case     | BYTE1BIT1 (bit 1) | BYTE1BIT2-8 (bits 2–8) | BYTES (beginning with byte2)    
+| Case | BYTE1BIT1 (bit 1) | BYTE1BIT2-8 (bits 2–8) | BYTES (beginning with byte2)  
 |----------|-------------------|------------------------|-------------------------------|
-| C_1_1    | 0                 | 0000000 (0)            | ---                           | 
-| C_1_2    | 0                 | 0010110 (22)           | ---                           |
-| C_2_1    | 1                 | 0000000 (0)            | ---                           |  
-| C_2_2_1  | 1                 | 0000110 (6)            | 0xFF 0x00                     | 
-| C_2_2_2  | 1                 | 0000011 (3)            | 0xA1 0xB2 0xC3                | 
-
+| C_1_1 | 0 | 0000000 (0) | --- |
+| C_1_2 | 0 | 0010110 (22) | --- |
+| C_2_1 | 1 | 0000000 (0) | --- |  
+| C_2_2_1 | 1 | 0000110 (6) | 0xFF 0x00 |
+| C_2_2_2 | 1 | 0000011 (3) | 0xA1 0xB2 0xC3 |
 
 ### Boundary Value Analysis
 
@@ -157,50 +159,51 @@ It focuses on examining the boundary values of each class, which are often a com
 In our example, once the equivalence classes have been identified, the boundary values are easy to determine.
 
 **First bit:**
+
 - BYTE1BIT1_0 = 0
-- BYTE1BIT1_1 = 1 
+- BYTE1BIT1_1 = 1
 
 **Next 7 bits:**
+
 - BYTE1BIT2-8_1 = 0
--  BYTE1BIT2-8_2 = 1
-- BYTE1BIT2-8_3 = 127 
+- BYTE1BIT2-8_2 = 1
+- BYTE1BIT2-8_3 = 127
 
 (is impossible to write 128 in 7 bits)
 
 **Next bytes:**
+
 - BYTES_1: no extra bytes
 - BYTES_2: 1 byte
 - BYTES_3: 127 bytes
 - BYTES_4 128 bytes.
 
-For the next bytes, for the no extra bytes, the value will be BYTES_1 = N/A, and for the others, we randomly choose 1 byte: 
+For the next bytes, for the no extra bytes, the value will be BYTES_1 = N/A, and for the others, we randomly choose 1 byte:
 BYTES_2 = 0xF0, 127 bytes: BYTES_3 = 0xA0 for 127 bytes BYTES_4 = 0xA0 for 128 bytes.
 
-| Case        | BYTE1BIT1 | BYTE1BIT2-8 | Payload Bytes                          | Expected Behavior                                  |
-|-------------|-----------|-------------|----------------------------------------|----------------------------------------------------|
-| C_1_1     | 0         | 0           | ---                                    | Valid – Result = 0, the rest ignored                             |     |
-| C_1_2     | 0         | 1           | ---                                    | Valid – Result = 1, the rest ignored                              |
-| C_1_3     | 0         | 127         | ---                                    | Valid – Result = 127, the rest ignored                            |
-| C_2_1     | 1         | 0           | ---                                   | Invalid – Length = 0 not allowed                |
-| C_2_2_1     | 1         | 1           | N/A                                    | Invalid – 1 byte expected, got none             |
-| C_2_2_2     | 1         | 1           | F0                                     | Valid – Result = 240(0xF0) exact match                             |
-| C_2_2_3     | 1         | 1           | A0 x 127                               | Valid – Result = 160(0xA0) extra bytes allowed                     |
-| C_2_2_4     | 1         | 1           | A0 x 128                               | Valid – Result = 160(0xA0) extra bytes allowed                     |
-| C_2_3_1     | 1         | 127         | N/A                                    | Invalid – 127 bytes expected, got none          |
-| C_2_3_2     | 1         | 127         | F0                                     | Invalid – only 1 byte, 126 missing              |
-| C_2_3_3     | 1         | 127         | A0 x 127                               | Valid – Result = 0xA0 x 127 exact match                             |
-| C_2_3_4     | 1         | 127         | A0 x 128                               | Valid – Result = 0xA0 x 127 extra byte allowed                      |
-               
-
-
+| Case    | BYTE1BIT1 | BYTE1BIT2-8 | Payload Bytes | Expected Behavior                              |
+| ------- | --------- | ----------- | ------------- | ---------------------------------------------- | --- |
+| C_1_1   | 0         | 0           | ---           | Valid – Result = 0, the rest ignored           |     |
+| C_1_2   | 0         | 1           | ---           | Valid – Result = 1, the rest ignored           |
+| C_1_3   | 0         | 127         | ---           | Valid – Result = 127, the rest ignored         |
+| C_2_1   | 1         | 0           | ---           | Invalid – Length = 0 not allowed               |
+| C_2_2_1 | 1         | 1           | N/A           | Invalid – 1 byte expected, got none            |
+| C_2_2_2 | 1         | 1           | F0            | Valid – Result = 240(0xF0) exact match         |
+| C_2_2_3 | 1         | 1           | A0 x 127      | Valid – Result = 160(0xA0) extra bytes allowed |
+| C_2_2_4 | 1         | 1           | A0 x 128      | Valid – Result = 160(0xA0) extra bytes allowed |
+| C_2_3_1 | 1         | 127         | N/A           | Invalid – 127 bytes expected, got none         |
+| C_2_3_2 | 1         | 127         | F0            | Invalid – only 1 byte, 126 missing             |
+| C_2_3_3 | 1         | 127         | A0 x 127      | Valid – Result = 0xA0 x 127 exact match        |
+| C_2_3_4 | 1         | 127         | A0 x 128      | Valid – Result = 0xA0 x 127 extra byte allowed |
 
 ## Structural testing
 
 ### Coverage testing
 
 **Transforming the code into an oriented graph**
+
 <div style="text-align:center">
-    <img src="./resources/oriented_graph_code.svg" width="45%"/>
+    <img src="./resources/oriented_graph_code.svg" width="100%"/>
 </div>
 
 **Structural Explanation**
@@ -229,6 +232,7 @@ BYTES_2 = 0xF0, 127 bytes: BYTES_3 = 0xA0 for 127 bytes BYTES_4 = 0xA0 for 128 b
   All 4 linearly independent paths (cyclomatic complexity = 4) are tested, including single-byte, exception, and multi-byte cases.
 
 ### Mutation Testing
+
 To further ensure the reliability of our tests, we applied mutation testing using Stryker.NET. This approach evaluates how well the current test suite detects bugs by introducing small code changes (called mutants) and observing whether the tests catch them.
 
 **What is Mutation Testing?**
@@ -239,12 +243,11 @@ This method complements traditional code coverage by checking test effectiveness
 
 **Results Summary**
 
-| Metric     | Value   | Explanation | 
-| ---------- | --------| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Mutants Killed**   | 17 |  Our test suite successfully detected these faulty code mutations
-| **Mutants Survived** | 7 |  These indicate areas where our tests did not detect injected logic changes
-| **Timeouts** | 0     | All tests completed execution reliably
-
+| Metric               | Value | Explanation                                                                |
+| -------------------- | ----- | -------------------------------------------------------------------------- |
+| **Mutants Killed**   | 17    | Our test suite successfully detected these faulty code mutations           |
+| **Mutants Survived** | 7     | These indicate areas where our tests did not detect injected logic changes |
+| **Timeouts**         | 0     | All tests completed execution reliably                                     |
 
 **Interpretation**
 The 7 surviving mutants suggest:
@@ -272,6 +275,7 @@ The 7 surviving mutants suggest:
 To run mutation tests on your own machine:
 
 - Install the Stryker.NET global tool:
+
   ```
   dotnet tool install -g dotnet-stryker
   ```
@@ -280,5 +284,5 @@ To run mutation tests on your own machine:
   ```
   dotnet stryker
   ```
-         
+
 After it completes, open the detailed HTML report
