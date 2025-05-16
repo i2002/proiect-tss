@@ -2,6 +2,16 @@
 
 The purpose of this project is testing a C# application using one of the available tools, in order to get familiar with the basic testing concepts, such as unit testing, mutation testing and more. In order to get started, a unit testing tool needs to be decided upon. Since there are multiple tools to choose from, the three best options available are the following: xUnit, NUnit and MSTest. A better understanding of each of them is required before deciding on the one that shall be used further in our project.
 
+## Presentation
+- [Project presentation](Proiect%20TSS%20-%20presentation.pdf)
+
+## Reports
+
+- [Video demo running tests](https://youtu.be/A6dwtrvomIE)
+- [Coverage report](reports/CoverageReport/index.html)
+- [Mutation report](reports/StrykerOutput/2025-05-16.21-39-15/reports/mutation-report.html)
+- [AI report](reports/Raport%20AI.pdf)
+
 ## Testing environment
 
 By consulting [medium.com](https://medium.com/@robertdennyson/xunit-vs-nunit-vs-mstest-choosing-the-right-testing-framework-for-net-applications-b6b9b750bec6), these tables come across as relevant.
@@ -356,9 +366,3 @@ To run mutation tests on your own machine:
   ```
 
 After it completes, open the detailed HTML report
-
-## Reports
-- [Video demo running tests](https://youtu.be/A6dwtrvomIE)
-- [Coverage report](reports/CoverageReport/index.html)
-- [Mutation report](reports/StrykerOutput/2025-05-16.21-39-15/reports/mutation-report.html)
-- [AI report](reports/Raport%20AI.pdf)
