@@ -70,12 +70,22 @@ It also handles errors, throwing an exception if an indefinite length is encount
 
 Furthermore, it also covers the case when there isn't enough data left in the buffer to read the declared length bytes.
 
-```csharp
-public int GetDataLength(ReadOnlySpan<byte> buffer, ref int position)
-{
-    byte firstByte = ReadByte(buffer, ref position);
+The input parameters are:
+- `firstByte` which is the first byte of the length byte sequence (it either specifies the length in short form, or the number of bytes encoding the length in long form)
+- `buffer` buffer with potential following bytes to compute long form
+- `position` start position in `buffer` to start reading from (value is incremented with the number of bytes used to parse the length in case of long form)
 
-    // Check if single byte length
+The output is the length encoded by the first byte and optionally following bytes in `buffer` starting from `position`.
+
+The function can throw exceptions with the following messages:
+- `"Indefinite length not supported in DER."` - in case of first byte encoding indefinite length
+- `"Invalid position"` - in case first byte encodes long form and provided `position` parameter is out of bounds for `buffer`
+- `"Unexpected end of data"` - in case not enough bytes in `buffer` starting from `position` to compute encoded length
+
+```csharp
+public long GetDataLength(byte firstByte, ReadOnlySpan<byte> buffer, ref int position)
+{
+    // Check if single byte length 
     if ((firstByte & 0x80) == 0)
     {
         return firstByte;
@@ -88,15 +98,28 @@ public int GetDataLength(ReadOnlySpan<byte> buffer, ref int position)
         throw new Exception("Indefinite length not supported in DER.");
     }
 
+    // Validate parameter position
+    if (position < 0 || position >= buffer.Length)
+    {
+        throw new Exception("Invalid position");
+    }
+
     // Add each byte to the length
-    int length = 0;
+    long length = 0;
     for (int i = 0; i < numBytes; i++)
     {
-        length = (length << 8) | ReadByte(buffer, ref position);
+        if (position < buffer.Length)
+        {
+            length = (length << 8) | buffer[position++];
+        }
+        else
+        {
+            throw new Exception("Unexpected end of data");
+        }
     }
+
     return length;
 }
-
 ```
 
 ## Functional testing
@@ -105,51 +128,59 @@ public int GetDataLength(ReadOnlySpan<byte> buffer, ref int position)
 
 First of all, we shall understand the use and need of equivalence classes. In testing, equivalence classes represent partitioning the inputs into groups also known as classes, where we assume the method would have a similar behaviour for every input group. For the purpose of this project, we will consider the GetDataLength() method and we will write the equivalence classes for it.
 
-#### 1. **The first bit**
+#### 1. First byte
 
 The most important bit can either be 0 or 1. In the first case, the next 7 bits encode the result, in the second, the next 7 bits encode the length of the result. Therefore, two classes stand out.
 
-**BYTE1BIT1:**
-
-- BYTE1BIT1_1: 0
-- BYTE1BIT1_2: 1
-
-#### 2. **The next 7 bits**
-
 The next 7 bits can take values between 0 and 127, however, in case of the first bit being 1, the next 7 bits cannot be encoding 0. The two classes are 0 and [1,127].
 
-**BYTE1BIT2-8:**
+Therefore we identify classes:
 
-- BYTE1BIT2-8_1: 0
-- BYTE1BIT2-8_2: [1-127]
+- `F_1` = 0x00 - 0x7F (first bit 0, representing short form length)
+- `F_2` = 0x80 (undefinite length, not allowed in DER)
+- `F_3` = 0x81 - 0xFF (first bit 1, representing number of following bytes encoding long form)
 
-#### 3.**The following bytes**
+#### 2. Following bytes buffer
 
-Next, if the first bit is not 0, the algorithm will read an number of bytes equal to the value encoded in the bits 2-8. However, there might be less bytes to be read than the number given in the 2-8 bits. Two classes emerge.
+Next, if the first bit is not 0, the algorithm will read an number of bytes equal to the value encoded in the bits 2-8. However, there might be less bytes to be read than the number given in the 2-8 bits. Two classes emerge, based on the number of bytes from the start offset compared to the bytes needed by encoding (bits 2 - 8 in `first_byte`):
 
-**BYTES:**
+- `B_1` = &ge; bytes needed
+- `B_2` = &lt; bytes needed
 
-- BYTES_1 < declared
-- BYTES_2 >= declared
+#### 3. Offset position
+
+The third parameter specifies the starting position in the buffer for reading the following bytes in case of long form. We can identify the following classes:
+
+- `P_1` = &lt; 0 (invalid array index)
+- `P_2` = &ge; 0 and &lt; buffer length (valid index inside array)
+- `P_3` = &ge; buffer length (invalid array index)
+
+#### Output classes
+- `O_1` = computed length
+- `O_2` = `"Indefinite length not supported in DER."` exception
+- `O_3` = `"Invalid position"` exception
+- `O_4` = `"Unexpected end of data"` exception
 
 This table explains what each value or interval of the encoding bytes implies about the length.
 
-| Case    | BYTE1BIT1 | BYTE1BIT2-8 Value | Number of bytes vs Declared Length | Class Combination                   | Interpretation                                |
-| ------- | --------- | ----------------- | ---------------------------------- | ----------------------------------- | --------------------------------------------- |
-| C_1_1   | 0         | 0                 | \_\_\_                             | BYTE1BIT1_1, BYTE1BIT2-8_1          | Encodes result = 0, no further processing     |
-| C_1_2   | 0         | 1–127             | \_\_\_                             | BYTE1BIT1_1, BYTE1BIT2-8_2          | Result encoded in 7 bits, no extra processing |
-| C_2_1   | 1         | 0                 | \_\_\_                             | BYTE1BIT1_2, BYTE1BIT2-8_1          | Not allowed                                   |
-| C_2_2_1 | 1         | 1–127             | < declared                         | BYTE1BIT1_2, BYTE1BIT2-8_2, BYTES_1 | Declared length too small for actual data     |
-| C_2_2_2 | 1         | 1–127             | >= declared                        | BYTE1BIT1_2, BYTE1BIT2-8_2, BYTES_2 | Valid length                                  |
+| Case      | First_byte | Buffer | Position | Interpretation                                   |
+| --------- | ---------- | ------ | -------- | ------------------------------------------------ |
+| `C_1`     | `F_1`      | \_\_\_ | \_\_\_   | Returns length from short form encoding          |
+| `C_2`     | `F_2`      | \_\_\_ | \_\_\_   | Indefinite length not supported in DER exception |
+| `C_3_1`   | `F_3`      | \_\_\_ | `P_1`    | Invalid position exception                       |
+| `C_3_2`   | `F_3`      | \_\_\_ | `P_3`    | Invalid position exception                       |
+| `C_3_3_1` | `F_3`      | `B_1`  | `P_3`    | Returns length from long form encoding           |
+| `C_3_3_2` | `F_3`      | `B_2`  | `P_3`    | Unexpected end of data exception                 |
 
 Choosing random values, we test:
-| Case | BYTE1BIT1 (bit 1) | BYTE1BIT2-8 (bits 2–8) | BYTES (beginning with byte2)  
-|----------|-------------------|------------------------|-------------------------------|
-| C_1_1 | 0 | 0000000 (0) | --- |
-| C_1_2 | 0 | 0010110 (22) | --- |
-| C_2_1 | 1 | 0000000 (0) | --- |  
-| C_2_2_1 | 1 | 0000110 (6) | 0xFF 0x00 |
-| C_2_2_2 | 1 | 0000011 (3) | 0xA1 0xB2 0xC3 |
+| Case      | First_byte | Buffer           | Position |
+| --------- | ---------- | ---------------- | -------- |
+| `C_1`     | 0x02       | \_\_\_           | \_\_\_   |
+| `C_2`     | 0x80       | \_\_\_           | \_\_\_   |
+| `C_3_1`   | 0x83       | 0x23, 0x44       | -2       |
+| `C_3_2`   | 0x84       | 0x24, 0x11       | 3        |
+| `C_3_3_1` | 0x83       | 0xA1, 0xB2, 0xC3 | 0        |
+| `C_3_3_2` | 0x86       | 0xFF, 0x00       | 0        |
 
 ### Boundary Value Analysis
 
@@ -158,43 +189,53 @@ It focuses on examining the boundary values of each class, which are often a com
 
 In our example, once the equivalence classes have been identified, the boundary values are easy to determine.
 
-**First bit:**
+#### 1. First byte
 
-- BYTE1BIT1_0 = 0
-- BYTE1BIT1_1 = 1
-
-**Next 7 bits:**
-
-- BYTE1BIT2-8_1 = 0
-- BYTE1BIT2-8_2 = 1
-- BYTE1BIT2-8_3 = 127
+- F_1 = 0x00 (BIT1: 0, BIT2-8: 0)
+- F_2 = 0x01 (BIT1: 0, BIT2-8: 1)
+- F_3 = 0x7F (BIT1: 0, BIT2-8: 127)
+- F_4 = 0x80 (BIT1: 1, BIT2-8: 0)
+- F_5 = 0x81 (BIT1: 1, BIT2-8: 1)
+- F_6 = 0xFF (BIT1: 1, BIT2-8: 127)
 
 (is impossible to write 128 in 7 bits)
 
-**Next bytes:**
+#### 2. Following bytes buffer
 
-- BYTES_1: no extra bytes
-- BYTES_2: 1 byte
-- BYTES_3: 127 bytes
-- BYTES_4 128 bytes.
+- B_1: no extra bytes
+- B_2: 1 byte
+- B_3: 127 bytes
+- B_4 128 bytes.
 
-For the next bytes, for the no extra bytes, the value will be BYTES_1 = N/A, and for the others, we randomly choose 1 byte:
-BYTES_2 = 0xF0, 127 bytes: BYTES_3 = 0xA0 for 127 bytes BYTES_4 = 0xA0 for 128 bytes.
+For the next bytes, for the no extra bytes, the value will be B_1 = N/A, and for the others, we randomly choose 1 byte:
+B_2 = 0xF0, 127 bytes: B_3 = 0xA0 for 127 bytes B_4 = 0xA0 for 128 bytes.
 
-| Case    | BYTE1BIT1 | BYTE1BIT2-8 | Payload Bytes | Expected Behavior                              |
-| ------- | --------- | ----------- | ------------- | ---------------------------------------------- | --- |
-| C_1_1   | 0         | 0           | ---           | Valid – Result = 0, the rest ignored           |     |
-| C_1_2   | 0         | 1           | ---           | Valid – Result = 1, the rest ignored           |
-| C_1_3   | 0         | 127         | ---           | Valid – Result = 127, the rest ignored         |
-| C_2_1   | 1         | 0           | ---           | Invalid – Length = 0 not allowed               |
-| C_2_2_1 | 1         | 1           | N/A           | Invalid – 1 byte expected, got none            |
-| C_2_2_2 | 1         | 1           | F0            | Valid – Result = 240(0xF0) exact match         |
-| C_2_2_3 | 1         | 1           | A0 x 127      | Valid – Result = 160(0xA0) extra bytes allowed |
-| C_2_2_4 | 1         | 1           | A0 x 128      | Valid – Result = 160(0xA0) extra bytes allowed |
-| C_2_3_1 | 1         | 127         | N/A           | Invalid – 127 bytes expected, got none         |
-| C_2_3_2 | 1         | 127         | F0            | Invalid – only 1 byte, 126 missing             |
-| C_2_3_3 | 1         | 127         | A0 x 127      | Valid – Result = 0xA0 x 127 exact match        |
-| C_2_3_4 | 1         | 127         | A0 x 128      | Valid – Result = 0xA0 x 127 extra byte allowed |
+### 3. Position
+
+- P_1 = -1
+- P_2 = 0
+- P_3 = 1
+- P_4 = buffer length - 1
+- P_5 = buffer length
+
+| Case    | First byte | Payload Bytes | Position | Expected Behavior                              |
+| ------- | ---------  | ------------- | -------- | ---------------------------------------------- |
+| C_1_1   | 0x00       | ---           | 0        | Valid – Result = 0, the rest ignored           |
+| C_1_2   | 0x01       | ---           | 0        | Valid – Result = 1, the rest ignored           |
+| C_1_3   | 0x7F       | ---           | 0        | Valid – Result = 127, the rest ignored         |
+| C_2_1   | 0x80       | ---           | 0        | Invalid – Length = 0 not allowed               |
+| C_2_2_1 | 0x81       | N/A           | 0        | Invalid – 1 byte expected, got none            |
+| C_2_2_2 | 0x81       | F0            | 0        | Valid – Result = 240(0xF0) exact match         |
+| C_2_2_3 | 0x81       | A0 x 127      | 0        | Valid – Result = 160(0xA0) extra bytes allowed |
+| C_2_2_4 | 0x81       | A0 x 128      | 0        | Valid – Result = 160(0xA0) extra bytes allowed |
+| C_2_3_1 | 0xFF       | N/A           | 0        | Invalid – 127 bytes expected, got none         |
+| C_2_3_2 | 0xFF       | F0            | 0        | Invalid – only 1 byte, 126 missing             |
+| C_2_3_3 | 0xFF       | A0 x 127      | 0        | Valid – Result = 0xA0 x 127 exact match        |
+| C_2_3_4 | 0xFF       | A0 x 128      | 0        | Valid – Result = 0xA0 x 127 extra byte allowed |
+| C_2_4_1 | 0x81       | F0            | -1       | Invalid - -1 is not a valid index              |
+| C_2_4_2 | 0x81       | F0            | 1        | Invalid - 1 is not a valid index               |
+| C_2_4_3 | 0xFF       | A0 x 127      | -1       | Invalid - -1 is not a valid index              |
+| C_2_4_4 | 0xFF       | A0 x 127      | 127      | Invalid - 127 is not a valid index               |
 
 ## Structural testing
 

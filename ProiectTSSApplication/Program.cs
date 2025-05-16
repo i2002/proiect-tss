@@ -27,17 +27,17 @@
                 return firstByte;
             }
 
-            // Validate parameter position
-            if (position < 0 || position > buffer.Length)
-            {
-                throw new Exception("Invalid position");
-            }
-
             // Get the number of bytes that compose the length
             int numBytes = firstByte & 0x7F;
             if (numBytes == 0)
             {
                 throw new Exception("Indefinite length not supported in DER.");
+            }
+
+            // Validate parameter position
+            if (position < 0 || position >= buffer.Length)
+            {
+                throw new Exception("Invalid position");
             }
 
             // Add each byte to the length
