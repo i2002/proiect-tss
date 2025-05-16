@@ -356,3 +356,9 @@ To run mutation tests on your own machine:
   ```
 
 After it completes, open the detailed HTML report
+
+## Reports
+- [Video demo running tests](https://youtu.be/A6dwtrvomIE)
+- [Coverage report](reports/CoverageReport/index.html)
+- [Mutation report](reports/StrykerOutput/2025-05-16.21-39-15/reports/mutation-report.html)
+- [AI report](reports/Raport%20AI.pdf)
