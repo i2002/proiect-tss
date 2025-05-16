@@ -122,6 +122,15 @@ public long GetDataLength(byte firstByte, ReadOnlySpan<byte> buffer, ref int pos
 }
 ```
 
+### Implementation study cases
+
+We have compared our implementation with the one in [tiny-asn1](https://gitlab.com/mtausig/tiny-asn1) project, which provides a bare-bones implementation of for parsing ASN1 encoded structures. Here we can find function `fetch_data_length` which has the same objective as the one implemented in this project.
+
+Besides differences in programming languages (here in C# we have used higher level concepts, like exceptions and complex data structures for the buffer), we can see
+that the implementation follows the same ideas.
+
+One thing to note is that this implementation explicitelly checks that the length formed when combining multiple bytes doesn't spill over the length of the data type (in the example `uint32_t`, which is storing integers on 4 bytes).
+
 ## Functional testing
 
 ### Writing equivalence classes
